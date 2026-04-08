@@ -1,0 +1,23 @@
+# Dependencies
+node_modules/
+
+# Runtime data & logs
+*.log
+bot-history.log
+
+# Trade output CSVs — generated at runtime, not part of source
+results.csv
+results-relaxed.csv
+rejected.csv
+rejected-relaxed.csv
+*.csv
+
+# Environment — never commit secrets or local config
+.env
+
+# Claude Code local settings
+.claude/
+
+# OS
+.DS_Store
+Thumbs.db
