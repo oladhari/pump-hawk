@@ -9,6 +9,7 @@
  * HARD REJECTION RULES
  * ─────────────────────
  *   age      > max_age_min   — boost effect faded (stale signal)
+ *   age      < min_age_min   — too fresh for this age window (default 0 = no floor)
  *   liq      = 0             — zero liquidity (rug waiting to happen)
  *   liq      < min_liq_usd   — illiquid pool ($10k floor blocks 46% of universe)
  *   pc_5m    < min_pc_5m     — no momentum
@@ -49,6 +50,9 @@ export function filter(snap, boost) {
 
   if (age !== null && age !== undefined && age > C.max_age_min)
     return _reject(`age ${age.toFixed(0)}min > ${C.max_age_min}min (boost effect faded)`);
+
+  if (age !== null && age !== undefined && age < C.min_age_min)
+    return _reject(`age ${age.toFixed(0)}min < ${C.min_age_min}min (too fresh for this window)`);
 
   if (liq <= 0)
     return _reject(`liq=$${liq.toFixed(0)} — zero liquidity`);
@@ -111,6 +115,9 @@ export function filter(snap, boost) {
 
   if (score < C.min_score)
     return _reject(`score ${score} < ${C.min_score} required`, score, b);
+
+  if (score > C.max_score)
+    return _reject(`score ${score} > ${C.max_score} (over-hyped signal)`, score, b);
 
   return { pass: true, reason: 'ok', score, breakdown: b };
 }

@@ -36,7 +36,9 @@ export const CONFIG = {
   max_buys_5m:      parseInt(process.env.V3_MAX_BUYS5M      || '250'),
   min_boost_amount: parseFloat(process.env.V3_MIN_BOOST     || '0.01'),
   min_score:        parseInt(process.env.V3_MIN_SCORE       || '70'),
+  max_score:        parseInt(process.env.V3_MAX_SCORE       || '100'),
   max_age_min:      parseFloat(process.env.V3_MAX_AGE_MIN   || '60'),
+  min_age_min:      parseFloat(process.env.V3_MIN_AGE_MIN   || '0'),
 
   // ── Exit strategy ──────────────────────────────────────────────
   tp1_pct:          parseFloat(process.env.V3_TP1           || '0.15'),  // +15% → sell 50%
