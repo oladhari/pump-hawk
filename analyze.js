@@ -44,57 +44,65 @@ console.log(`\nAnalyzing ${rows.length} trades from ${file}\n`);
 
 // ── TP levels to test (as multipliers) ─────────────────────────────
 const TP_LEVELS = [
-  { label: 'TP+15%',  mult: 1.15, col: 'hit_tp15'  },
-  { label: 'TP+20%',  mult: 1.20, col: 'hit_tp20'  },
-  { label: 'TP+30%',  mult: 1.30, col: 'hit_tp30'  },
-  { label: 'TP+35%',  mult: 1.35, col: 'hit_tp35'  },
-  { label: 'TP+50%',  mult: 1.50, col: 'hit_tp50'  },
-  { label: 'TP+60%',  mult: 1.60, col: 'hit_tp60'  },  // derived from peak if col missing
-  { label: 'TP+75%',  mult: 1.75, col: 'hit_tp75'  },
-  { label: 'TP+100%', mult: 2.00, col: 'hit_tp100' },
-  { label: 'TP+130%', mult: 2.30, col: 'hit_tp130' },
-  { label: 'TP+200%', mult: 3.00, col: 'hit_tp200' },
+  { label: 'TP+15%',  mult: 1.15, col: 'hit_tp15',  time_col: 'time_to_tp15_s'  },
+  { label: 'TP+20%',  mult: 1.20, col: 'hit_tp20',  time_col: 'time_to_tp20_s'  },
+  { label: 'TP+30%',  mult: 1.30, col: 'hit_tp30',  time_col: 'time_to_tp30_s'  },
+  { label: 'TP+35%',  mult: 1.35, col: 'hit_tp35',  time_col: 'time_to_tp35_s'  },
+  { label: 'TP+50%',  mult: 1.50, col: 'hit_tp50',  time_col: 'time_to_tp50_s'  },
+  { label: 'TP+60%',  mult: 1.60, col: 'hit_tp60',  time_col: 'time_to_tp60_s'  },
+  { label: 'TP+75%',  mult: 1.75, col: 'hit_tp75',  time_col: 'time_to_tp75_s'  },
+  { label: 'TP+100%', mult: 2.00, col: 'hit_tp100', time_col: 'time_to_tp100_s' },
+  { label: 'TP+130%', mult: 2.30, col: 'hit_tp130', time_col: 'time_to_tp130_s' },
+  { label: 'TP+200%', mult: 3.00, col: 'hit_tp200', time_col: 'time_to_tp200_s' },
 ];
 
 // ── SL levels to test (as multipliers) ─────────────────────────────
 const SL_LEVELS = [
-  { label: 'SL-10%', mult: 0.90, col: 'hit_sl10' },
-  { label: 'SL-15%', mult: 0.85, col: 'hit_sl15' },
-  { label: 'SL-20%', mult: 0.80, col: 'hit_sl20' },
-  { label: 'SL-30%', mult: 0.70, col: 'hit_sl30' },
-  { label: 'SL-60%', mult: 0.40, col: 'hit_sl60' },
-  { label: 'no SL',  mult: null, col: null        },
+  { label: 'SL-10%', mult: 0.90, col: 'hit_sl10', time_col: 'time_to_sl10_s' },
+  { label: 'SL-15%', mult: 0.85, col: 'hit_sl15', time_col: 'time_to_sl15_s' },
+  { label: 'SL-20%', mult: 0.80, col: 'hit_sl20', time_col: 'time_to_sl20_s' },
+  { label: 'SL-30%', mult: 0.70, col: 'hit_sl30', time_col: 'time_to_sl30_s' },
+  { label: 'SL-60%', mult: 0.40, col: 'hit_sl60', time_col: 'time_to_sl60_s' },
+  { label: 'no SL',  mult: null, col: null,        time_col: null             },
 ];
 
-// ── Helper: was a level hit? ────────────────────────────────────────
-// Prefer the explicit hit_* column; fall back to peak/close comparison.
-function tp_hit(row, tp) {
-  if (tp.col && row[tp.col] !== undefined) return row[tp.col] === 'yes';
-  return parseFloat(row['peak_multiplier'] || 0) >= tp.mult;
-}
-
-function sl_hit(row, sl) {
-  if (!sl.mult) return false;
-  if (sl.col && row[sl.col] !== undefined) return row[sl.col] === 'yes';
-  // fallback: close_multiplier dropped below SL level
-  return parseFloat(row['close_multiplier'] || 1) <= sl.mult;
+// ── Get hit timestamp in seconds, or null if not hit ───────────────
+function get_time(row, level) {
+  if (!level.col) return null;
+  // Use explicit hit column if present
+  const hit = row[level.col];
+  if (hit !== undefined && hit !== 'yes') return null;
+  // Use timestamp column
+  const t = level.time_col ? parseFloat(row[level.time_col]) : NaN;
+  if (!isNaN(t) && t > 0) return t;
+  // Fallback for TP: derive hit from peak_multiplier (no timestamp available)
+  if (level.mult >= 1 && hit === undefined) {
+    return parseFloat(row['peak_multiplier'] || 0) >= level.mult ? Infinity : null;
+  }
+  // Fallback for SL: derive hit from close_multiplier (no timestamp available)
+  if (level.mult < 1 && hit === undefined) {
+    return parseFloat(row['close_multiplier'] || 1) <= level.mult ? Infinity : null;
+  }
+  return hit === 'yes' ? Infinity : null;  // hit but no timestamp — assume last
 }
 
 // ── Simulate single-exit PnL for a TP+SL combo ─────────────────────
-// Returns PnL % for one trade. SL fires if price hits SL before TP.
-// Since we only have hit flags (not which hit first), we approximate:
-//   if both TP and SL hit → SL takes precedence (conservative, realistic for meme tokens)
-//   if only TP hit        → +TP%
-//   if only SL hit        → -SL%
-//   neither               → timeout price
+// Uses timestamps to determine which level fired first.
+// If timestamps are missing for one side, falls back to hit-only logic.
 function simulate(row, tp, sl) {
-  const tm    = parseFloat(row['close_multiplier'] || 1);
-  const t_hit = tp_hit(row, tp);
-  const s_hit = sl.mult ? sl_hit(row, sl) : false;
+  const tm   = parseFloat(row['close_multiplier'] || 1);
+  const tp_t = get_time(row, tp);
+  const sl_t = sl.mult ? get_time(row, sl) : null;
 
-  if (s_hit) return (sl.mult - 1) * 100;      // SL fired
-  if (t_hit) return (tp.mult - 1) * 100;      // TP hit, no SL
-  return (tm - 1) * 100;                       // held to timeout
+  if (tp_t !== null && sl_t !== null) {
+    // Both hit — whichever came first wins
+    return tp_t <= sl_t
+      ? (tp.mult - 1) * 100   // TP hit first
+      : (sl.mult - 1) * 100;  // SL hit first
+  }
+  if (sl_t !== null) return (sl.mult - 1) * 100;
+  if (tp_t !== null) return (tp.mult - 1) * 100;
+  return (tm - 1) * 100;  // neither hit — timeout price
 }
 
 // ── Run all combos ──────────────────────────────────────────────────
