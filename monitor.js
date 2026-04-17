@@ -66,10 +66,14 @@ const CSV_HEADER = [
   'hit_tp50',  'time_to_tp50_s',
   'hit_tp75',  'time_to_tp75_s',
   'hit_tp100', 'time_to_tp100_s',
+  'hit_tp130', 'time_to_tp130_s',
+  'hit_tp200', 'time_to_tp200_s',
   // SL hit tracking (different levels for calibration)
   'hit_sl10',  'time_to_sl10_s',
   'hit_sl15',  'time_to_sl15_s',
   'hit_sl20',  'time_to_sl20_s',
+  'hit_sl30',  'time_to_sl30_s',
+  'hit_sl60',  'time_to_sl60_s',
   // Active strategy PnL (weighted 3-tranche)
   'pnl_active_strategy',
   // Hypothetical single-exit PnLs (TP calibration)
@@ -78,10 +82,15 @@ const CSV_HEADER = [
   'pnl_if_tp30_full',
   'pnl_if_tp35_full',
   'pnl_if_tp50_full',
+  'pnl_if_tp100_full',
+  'pnl_if_tp130_full',
+  'pnl_if_tp200_full',
   // Hypothetical SL-only PnLs
   'pnl_if_sl10',
   'pnl_if_sl15',
   'pnl_if_sl20',
+  'pnl_if_sl30',
+  'pnl_if_sl60',
   // No exit — hold entire window
   'pnl_if_timeout',
   // Diagnostics
@@ -146,7 +155,9 @@ export class Monitor {
       // TP/SL level timestamps (set on first touch, never cleared)
       tp10_t: null, tp15_t: null, tp20_t: null, tp30_t: null,
       tp35_t: null, tp50_t: null, tp75_t: null, tp100_t: null,
+      tp130_t: null, tp200_t: null,
       sl10_t: null, sl15_t: null, sl20_t: null,
+      sl30_t: null, sl60_t: null,
 
       // 3-tranche exit state
       t1_taken:         false, t1_exit_mult:    null,
@@ -198,6 +209,8 @@ export class Monitor {
     if (!pos.sl10_t && mult <= 0.90) pos.sl10_t = age_s;
     if (!pos.sl15_t && mult <= 0.85) pos.sl15_t = age_s;
     if (!pos.sl20_t && mult <= 0.80) pos.sl20_t = age_s;
+    if (!pos.sl30_t && mult <= 0.70) pos.sl30_t = age_s;
+    if (!pos.sl60_t && mult <= 0.40) pos.sl60_t = age_s;
 
     // Fire SL immediately — don't wait for next 5s poll
     if (mult <= 1 + CONFIG.sl_pct) {
@@ -231,9 +244,13 @@ export class Monitor {
         if (!pos.tp50_t  && mult >= 1.50) pos.tp50_t  = age_s;
         if (!pos.tp75_t  && mult >= 1.75) pos.tp75_t  = age_s;
         if (!pos.tp100_t && mult >= 2.00) pos.tp100_t = age_s;
+        if (!pos.tp130_t && mult >= 2.30) pos.tp130_t = age_s;
+        if (!pos.tp200_t && mult >= 3.00) pos.tp200_t = age_s;
         if (!pos.sl10_t  && mult <= 0.90) pos.sl10_t  = age_s;
         if (!pos.sl15_t  && mult <= 0.85) pos.sl15_t  = age_s;
         if (!pos.sl20_t  && mult <= 0.80) pos.sl20_t  = age_s;
+        if (!pos.sl30_t  && mult <= 0.70) pos.sl30_t  = age_s;
+        if (!pos.sl60_t  && mult <= 0.40) pos.sl60_t  = age_s;
 
         if (!pos.exited) {
           this._apply_exit_logic(mint, pos, mult, age_s);
@@ -345,17 +362,22 @@ export class Monitor {
 
     // If TP hit: exit 100% at that level; else: hold to timeout
     const hyp_tp = (level, hit_t) => hit_t ? pct(level) : pct(tm);
-    const pnl_tp15 = hyp_tp(1.15, pos.tp15_t);
-    const pnl_tp20 = hyp_tp(1.20, pos.tp20_t);
-    const pnl_tp30 = hyp_tp(1.30, pos.tp30_t);
-    const pnl_tp35 = hyp_tp(1.35, pos.tp35_t);
-    const pnl_tp50 = hyp_tp(1.50, pos.tp50_t);
+    const pnl_tp15  = hyp_tp(1.15, pos.tp15_t);
+    const pnl_tp20  = hyp_tp(1.20, pos.tp20_t);
+    const pnl_tp30  = hyp_tp(1.30, pos.tp30_t);
+    const pnl_tp35  = hyp_tp(1.35, pos.tp35_t);
+    const pnl_tp50  = hyp_tp(1.50, pos.tp50_t);
+    const pnl_tp100 = hyp_tp(2.00, pos.tp100_t);
+    const pnl_tp130 = hyp_tp(2.30, pos.tp130_t);
+    const pnl_tp200 = hyp_tp(3.00, pos.tp200_t);
 
     // If SL hit: exit at that level; else: hold to timeout
     const hyp_sl = (hit_t, sl_mult) => hit_t ? pct(sl_mult) : pct(tm);
     const pnl_sl10 = hyp_sl(pos.sl10_t, 0.90);
     const pnl_sl15 = hyp_sl(pos.sl15_t, 0.85);
     const pnl_sl20 = hyp_sl(pos.sl20_t, 0.80);
+    const pnl_sl30 = hyp_sl(pos.sl30_t, 0.70);
+    const pnl_sl60 = hyp_sl(pos.sl60_t, 0.40);
 
     const pnl_timeout = pct(tm);
 
@@ -389,10 +411,14 @@ export class Monitor {
       pos.tp50_t  ? 'yes' : 'no', pos.tp50_t  ?? '',
       pos.tp75_t  ? 'yes' : 'no', pos.tp75_t  ?? '',
       pos.tp100_t ? 'yes' : 'no', pos.tp100_t ?? '',
+      pos.tp130_t ? 'yes' : 'no', pos.tp130_t ?? '',
+      pos.tp200_t ? 'yes' : 'no', pos.tp200_t ?? '',
       // SL hits
       pos.sl10_t  ? 'yes' : 'no', pos.sl10_t  ?? '',
       pos.sl15_t  ? 'yes' : 'no', pos.sl15_t  ?? '',
       pos.sl20_t  ? 'yes' : 'no', pos.sl20_t  ?? '',
+      pos.sl30_t  ? 'yes' : 'no', pos.sl30_t  ?? '',
+      pos.sl60_t  ? 'yes' : 'no', pos.sl60_t  ?? '',
       // PnL
       pnl_active,
       pnl_tp15,
@@ -400,9 +426,14 @@ export class Monitor {
       pnl_tp30,
       pnl_tp35,
       pnl_tp50,
+      pnl_tp100,
+      pnl_tp130,
+      pnl_tp200,
       pnl_sl10,
       pnl_sl15,
       pnl_sl20,
+      pnl_sl30,
+      pnl_sl60,
       pnl_timeout,
       pos.rt_sl_fired ? 'yes' : 'no',
     ].join(',');
