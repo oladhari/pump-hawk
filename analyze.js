@@ -19,7 +19,6 @@
  */
 
 import fs from 'fs';
-import { parse } from 'csv-parse/sync';
 
 const file = process.argv[2];
 if (!file) {
@@ -27,8 +26,14 @@ if (!file) {
   process.exit(1);
 }
 
-const raw  = fs.readFileSync(file, 'utf8');
-const rows = parse(raw, { columns: true, skip_empty_lines: true });
+const lines  = fs.readFileSync(file, 'utf8').trim().split('\n');
+const headers = lines[0].split(',');
+const rows = lines.slice(1).filter(Boolean).map(line => {
+  const vals = line.split(',');
+  const obj  = {};
+  headers.forEach((h, i) => { obj[h] = vals[i] ?? ''; });
+  return obj;
+});
 
 if (rows.length === 0) {
   console.log('No trades found in', file);
