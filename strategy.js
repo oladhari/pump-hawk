@@ -66,6 +66,9 @@ export function filter(snap, boost) {
   if (pc5m > C.max_pc_5m)
     return _reject(`pc_5m ${pc5m.toFixed(1)}% > ${C.max_pc_5m}% (overextended)`);
 
+  if (mcap < C.min_mcap_usd)
+    return _reject(`mcap $${(mcap / 1000).toFixed(0)}k < $${C.min_mcap_usd / 1000}k (too small)`);
+
   if (mcap >= C.max_mcap_usd)
     return _reject(`mcap $${(mcap / 1000).toFixed(0)}k >= $${C.max_mcap_usd / 1000}k (too large)`);
 

@@ -88,21 +88,31 @@ function _connect() {
   });
 }
 
-// ── Diagnostic counter ────────────────────────────────────────────
-let _dbg = { buys: 0, sells: 0 };
+// ── Diagnostic counters ───────────────────────────────────────────
+// _raw: every message received from PP (any mint)
+// _matched: messages for our subscribed mints
+// _fired: callbacks that passed vSol check (real-time SL eligible)
+let _dbg = { raw: 0, matched: 0, no_vsol: 0, buys: 0, sells: 0 };
 setInterval(() => {
-  if (_dbg.buys + _dbg.sells > 0) {
-    log(`[PP] 5-min trade events — buys: ${_dbg.buys}  sells: ${_dbg.sells}  subs: ${_trade_cbs.size}`);
-    _dbg = { buys: 0, sells: 0 };
-  }
+  log(`[PP] 5-min stats — raw_msgs:${_dbg.raw}  matched:${_dbg.matched}  no_vSol:${_dbg.no_vsol}  callbacks(buy/sell):${_dbg.buys}/${_dbg.sells}  subs:${_trade_cbs.size}`);
+  _dbg = { raw: 0, matched: 0, no_vsol: 0, buys: 0, sells: 0 };
 }, 5 * 60_000);
 
 // ── Message handler ───────────────────────────────────────────────
 
 function _handle(msg) {
   if (typeof msg !== 'object' || !msg?.mint) return;
+  _dbg.raw++;
+
   const cb = _trade_cbs.get(msg.mint);
   if (!cb) return;
+  _dbg.matched++;
+
+  // Check if bonding-curve data is present (graduated Raydium tokens won't have it)
+  if (!msg.vSolInBondingCurve || !msg.vTokensInBondingCurve) {
+    _dbg.no_vsol++;
+    return;
+  }
 
   if (msg.txType === 'buy')  { _dbg.buys++;  cb(msg); }
   if (msg.txType === 'sell') { _dbg.sells++; cb(msg); }

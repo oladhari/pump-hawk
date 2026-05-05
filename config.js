@@ -29,6 +29,7 @@ export const CONFIG = {
   // ── Hard entry filters ─────────────────────────────────────────
   min_pc_5m:        parseFloat(process.env.V3_MIN_PC5M      || '10'),
   max_pc_5m:        parseFloat(process.env.V3_MAX_PC5M      || '25'),
+  min_mcap_usd:     parseFloat(process.env.V3_MIN_MCAP      || '0'),
   max_mcap_usd:     parseFloat(process.env.V3_MAX_MCAP      || '80000'),
   min_liq_usd:      parseFloat(process.env.V3_MIN_LIQ       || '10000'),
   min_vol_5m:       parseFloat(process.env.V3_MIN_VOL5M     || '1500'),
